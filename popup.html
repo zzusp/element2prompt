@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Element2Prompt</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 360px;
+            min-height: 200px;
+            padding: 0;
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            background: #ffffff;
+            min-height: 200px;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            text-align: center;
+            color: white;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 20px;
+            font-weight: 600;
+            margin: 0;
+            letter-spacing: 0.5px;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+
+        .header .subtitle {
+            font-size: 12px;
+            margin-top: 4px;
+            opacity: 0.9;
+            font-weight: 300;
+        }
+
+        .content {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .button {
+            width: 100%;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .button::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .button:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .button:active {
+            transform: scale(0.98);
+        }
+
+        .button.select-mode {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+
+        .button.select-mode:hover {
+            box-shadow: 0 4px 12px rgba(245, 87, 108, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .button.exit-mode {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+        }
+
+        .button.exit-mode:hover {
+            box-shadow: 0 4px 12px rgba(79, 172, 254, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .status {
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            display: none;
+            animation: slideIn 0.3s ease-out;
+            border-left: 4px solid;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .status.error {
+            background-color: #fee;
+            color: #c33;
+            border-left-color: #c33;
+        }
+
+        .status.success {
+            background-color: #efe;
+            color: #3c3;
+            border-left-color: #3c3;
+        }
+
+        .status.info {
+            background-color: #e3f2fd;
+            color: #1976d2;
+            border-left-color: #1976d2;
+        }
+
+        .config-link {
+            text-align: center;
+            margin-top: 8px;
+            padding-top: 16px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .config-link a {
+            color: #667eea;
+            text-decoration: none;
+            font-size: 13px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: color 0.2s;
+            font-weight: 500;
+        }
+
+        .config-link a:hover {
+            color: #764ba2;
+        }
+
+        .config-link a::after {
+            content: '→';
+            transition: transform 0.2s;
+        }
+
+        .config-link a:hover::after {
+            transform: translateX(2px);
+        }
+
+        .footer {
+            padding: 12px 20px;
+            background: #f8f9fa;
+            text-align: center;
+            font-size: 11px;
+            color: #666;
+            border-top: 1px solid #e0e0e0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Element2Prompt</h1>
+            <div class="subtitle">选择页面元素生成提示词</div>
+        </div>
+        
+        <div class="content">
+            <button id="selectModeBtn" class="button select-mode">进入选择模式</button>
+            <button id="exitSelectModeBtn" class="button exit-mode" style="display: none;">退出选择模式</button>
+            
+            <div id="status" class="status"></div>
+            
+            <div class="config-link">
+                <a href="options.html" target="_blank">配置提示词模板</a>
+            </div>
+        </div>
+
+        <div class="footer">
+            v1.0.0
+        </div>
+    </div>
+    <script src="popup.js"></script>
+</body>
+</html>
