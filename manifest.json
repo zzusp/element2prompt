@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Element2Prompt",
-  "version": "1.0",
-  "description": "选择页面元素并填充到提示词模板",
+  "version": "1.1.0",
+  "description": "让你的AI IDE/CLI看见页面 - 选择页面元素并填充到提示词模板",
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
