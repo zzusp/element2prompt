@@ -1,0 +1,31 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+    <!-- 背景渐变 -->
+    <defs>
+        <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#667eea"/>
+            <stop offset="100%" stop-color="#764ba2"/>
+        </linearGradient>
+        <linearGradient id="centerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#f093fb"/>
+            <stop offset="100%" stop-color="#f5576c"/>
+        </linearGradient>
+    </defs>
+    
+    <!-- 背景矩形 -->
+    <rect width="128" height="128" rx="16" fill="url(#gradient)"/>
+    
+    <!-- 左上角：E -->
+    <text x="32" y="48" fill="white" font-size="28" font-weight="bold" font-family="Arial, sans-serif">E</text>
+    
+    <!-- 右下角：P -->
+    <text x="88" y="104" fill="white" font-size="28" font-weight="bold" font-family="Arial, sans-serif">P</text>
+    
+    <!-- 左下角：转换符号 -->
+    <path d="M32 88 L48 76" stroke="white" stroke-width="3" fill="none" stroke-linecap="round"/>
+    
+    <!-- 右上角：转换符号 -->
+    <path d="M96 40 L80 52" stroke="white" stroke-width="3" fill="none" stroke-linecap="round"/>
+    
+    <!-- 中心转换点 -->
+    <circle cx="64" cy="64" r="8" fill="url(#centerGradient)"/>
+</svg>

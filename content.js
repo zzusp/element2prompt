@@ -9,6 +9,7 @@ class ContentExtractor {
         this.isSelectionLocked = false; // 标记选中是否已锁定
         this.toolbar = null;
         this.messageListenerRegistered = false;
+        this.highlightOverlay = null; // 选中框覆盖层
         
         console.log('[Content] ContentExtractor instance created');
         this.init();
@@ -299,6 +300,7 @@ class ContentExtractor {
         if (this.selectedElement) {
             this.selectedElement.classList.remove('element2prompt-highlight');
         }
+        this.removeHighlightOverlay();
         this.selectedElement = null;
         this.isSelectionLocked = false; // 解除锁定
         console.log('[Content] Element selection cleanup complete');
@@ -317,6 +319,11 @@ class ContentExtractor {
             return;
         }
         
+        // 忽略覆盖层本身
+        if (this.highlightOverlay && (element === this.highlightOverlay || this.highlightOverlay.contains(element))) {
+            return;
+        }
+        
         // 清除之前的高亮（如果之前有未锁定的选中）
         if (this.selectedElement && this.selectedElement !== element && !this.isSelectionLocked) {
             this.selectedElement.classList.remove('element2prompt-highlight');
@@ -330,6 +337,9 @@ class ContentExtractor {
             }
             element.classList.add('element2prompt-highlight');
             this.selectedElement = element;
+            
+            // 更新选中框覆盖层
+            this.updateHighlightOverlay(element);
             
             // 更新工具栏信息
             this.updateSelectionInfo(element);
@@ -346,6 +356,11 @@ class ContentExtractor {
             return;
         }
         
+        // 忽略覆盖层本身
+        if (this.highlightOverlay && (element === this.highlightOverlay || this.highlightOverlay.contains(element))) {
+            return;
+        }
+        
         e.preventDefault();
         e.stopPropagation();
         
@@ -355,6 +370,9 @@ class ContentExtractor {
         
         // 确保选中元素有高亮样式
         element.classList.add('element2prompt-highlight');
+        
+        // 更新选中框覆盖层
+        this.updateHighlightOverlay(element);
         
         // 更新工具栏信息
         this.updateSelectionInfo(this.selectedElement);
@@ -417,13 +435,82 @@ class ContentExtractor {
                 cursor: pointer !important;
             }
             .element2prompt-highlight {
-                outline: 3px solid #667eea !important;
-                outline-offset: 2px !important;
-                box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2) !important;
-                transition: outline 0.2s ease, box-shadow 0.2s ease !important;
+                /* 保留一个轻微的视觉提示，但主要使用覆盖层 */
+                position: relative;
+            }
+            #element2prompt-highlight-overlay {
+                position: fixed;
+                pointer-events: none;
+                z-index: 2147483646;
+                border: 3px solid #667eea;
+                box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2), 
+                            0 0 0 5px rgba(102, 126, 234, 0.1),
+                            0 4px 12px rgba(0, 0, 0, 0.15);
+                border-radius: 2px;
+                transition: opacity 0.2s ease;
+                box-sizing: border-box;
             }
         `;
         document.head.appendChild(style);
+    }
+    
+    updateHighlightOverlay(element) {
+        if (!element) {
+            this.removeHighlightOverlay();
+            return;
+        }
+        
+        try {
+            const rect = element.getBoundingClientRect();
+            
+            // 创建或更新覆盖层
+            if (!this.highlightOverlay) {
+                this.highlightOverlay = document.createElement('div');
+                this.highlightOverlay.id = 'element2prompt-highlight-overlay';
+                document.body.appendChild(this.highlightOverlay);
+            }
+            
+            // 更新覆盖层位置和大小（使用 fixed 定位，相对于视口）
+            this.highlightOverlay.style.left = rect.left + 'px';
+            this.highlightOverlay.style.top = rect.top + 'px';
+            this.highlightOverlay.style.width = Math.max(0, rect.width) + 'px';
+            this.highlightOverlay.style.height = Math.max(0, rect.height) + 'px';
+            this.highlightOverlay.style.opacity = '1';
+            
+            // 监听滚动和窗口大小变化，更新覆盖层位置
+            if (!this.overlayUpdateListeners) {
+                this.overlayUpdateListeners = {
+                    scroll: () => {
+                        if (this.selectedElement) {
+                            this.updateHighlightOverlay(this.selectedElement);
+                        }
+                    },
+                    resize: () => {
+                        if (this.selectedElement) {
+                            this.updateHighlightOverlay(this.selectedElement);
+                        }
+                    }
+                };
+                window.addEventListener('scroll', this.overlayUpdateListeners.scroll, true);
+                window.addEventListener('resize', this.overlayUpdateListeners.resize);
+            }
+        } catch (error) {
+            console.error('[Content] 更新选中框覆盖层失败:', error);
+        }
+    }
+    
+    removeHighlightOverlay() {
+        if (this.highlightOverlay) {
+            this.highlightOverlay.remove();
+            this.highlightOverlay = null;
+        }
+        
+        // 移除监听器
+        if (this.overlayUpdateListeners) {
+            window.removeEventListener('scroll', this.overlayUpdateListeners.scroll, true);
+            window.removeEventListener('resize', this.overlayUpdateListeners.resize);
+            this.overlayUpdateListeners = null;
+        }
     }
     
     clearSelection() {
@@ -431,6 +518,9 @@ class ContentExtractor {
             this.selectedElement.classList.remove('element2prompt-highlight');
             this.selectedElement = null;
         }
+        
+        // 移除选中框覆盖层
+        this.removeHighlightOverlay();
         
         // 解除锁定
         this.isSelectionLocked = false;
@@ -617,8 +707,8 @@ class ContentExtractor {
             clipboardElement.style.display = 'block';
             
             // 限制显示长度，如果太长则截断并提示
-            if (content.length > 500) {
-                clipboardElement.textContent = content.substring(0, 500) + '\n\n... (内容已截断，完整内容已复制到剪贴板)';
+            if (content.length > 1200) {
+                clipboardElement.textContent = content.substring(0, 1200) + '\n\n... (内容已截断，完整内容已复制到剪贴板)';
             }
         }
     }
@@ -656,16 +746,157 @@ class ContentExtractor {
     }
     
     getElementCSS(element) {
-        const styles = window.getComputedStyle(element);
         let css = '';
         
-        for (let i = 0; i < styles.length; i++) {
-            const property = styles[i];
-            const value = styles.getPropertyValue(property);
-            css += `${property}: ${value};\n`;
+        // 1. 获取元素自身的内联样式
+        if (element.style && element.style.length > 0) {
+            for (let i = 0; i < element.style.length; i++) {
+                const property = element.style[i];
+                const value = element.style.getPropertyValue(property);
+                if (value) {
+                    css += `${property}: ${value};\n`;
+                }
+            }
         }
         
-        return css;
+        // 2. 获取元素自身class和id的样式（从样式表中查找）
+        // 遍历所有样式表，查找匹配的规则
+        try {
+            for (let sheetIndex = 0; sheetIndex < document.styleSheets.length; sheetIndex++) {
+                const sheet = document.styleSheets[sheetIndex];
+                try {
+                    // 跳过跨域样式表
+                    if (!sheet.cssRules && !sheet.rules) continue;
+                    
+                    const rules = sheet.cssRules || sheet.rules;
+                    for (let ruleIndex = 0; ruleIndex < rules.length; ruleIndex++) {
+                        const rule = rules[ruleIndex];
+                        
+                        // 只处理样式规则
+                        if (rule.type !== CSSRule.STYLE_RULE && rule.type !== 1) continue;
+                        
+                        const selector = rule.selectorText;
+                        if (!selector) continue;
+                        
+                        // 检查选择器是否匹配当前元素，且是直接匹配（不包含父元素选择器）
+                        try {
+                            // 将选择器按逗号分割，检查每个选择器
+                            const selectors = selector.split(',').map(s => s.trim());
+                            let hasDirectMatch = false;
+                            
+                            for (const sel of selectors) {
+                                // 先检查选择器是否匹配元素（使用浏览器原生方法）
+                                let matchesElement = false;
+                                try {
+                                    matchesElement = element.matches(sel);
+                                } catch (e) {
+                                    // 选择器可能无效，跳过
+                                    continue;
+                                }
+                                
+                                if (matchesElement) {
+                                    // 再检查是否是直接匹配（不包含父元素、后代选择器等）
+                                    const isDirectMatch = this.isDirectSelectorMatch(element, sel);
+                                    
+                                    if (isDirectMatch) {
+                                        hasDirectMatch = true;
+                                        break; // 找到直接匹配就跳出
+                                    }
+                                }
+                            }
+                            
+                            if (hasDirectMatch) {
+                                // 添加匹配的CSS规则
+                                css += `/* ${selector} */\n`;
+                                if (rule.style) {
+                                    for (let i = 0; i < rule.style.length; i++) {
+                                        const property = rule.style[i];
+                                        const value = rule.style.getPropertyValue(property);
+                                        if (value) {
+                                            css += `  ${property}: ${value};\n`;
+                                        }
+                                    }
+                                }
+                                css += '\n';
+                            }
+                        } catch (e) {
+                            // 选择器可能无效，跳过
+                            continue;
+                        }
+                    }
+                } catch (e) {
+                    // 跳过无法访问的样式表（可能是跨域）
+                    continue;
+                }
+            }
+        } catch (e) {
+            console.warn('[Content] 获取样式表规则时出错:', e);
+        }
+        
+        return css.trim();
+    }
+    
+    // 检查选择器是否直接匹配元素（不包含父元素或后代选择器）
+    // 注意：这个方法假设 element.matches(selector) 已经返回 true
+    isDirectSelectorMatch(element, selector) {
+        // 移除伪类和伪元素（保留选择器的主体部分）
+        const cleanSelector = selector.replace(/::?[a-zA-Z-]+(\([^)]*\))?/g, '').trim();
+        
+        // 如果选择器包含空格、>、+、~ 等组合符，说明不是直接匹配
+        // 这些组合符表示父元素、子元素、兄弟元素等关系
+        if (/[\s>+~]/.test(cleanSelector)) {
+            return false;
+        }
+        
+        // 如果选择器以 :not()、:has() 等伪类开头，可能包含复杂的选择器，需要进一步检查
+        // 但我们已经移除了伪类，所以这里主要检查组合符
+        
+        // 如果选择器不包含组合符，并且 element.matches(selector) 返回 true，
+        // 那么基本上就是直接匹配了（可能是 tagName、#id、.className 或其组合）
+        // 为了更安全，我们可以进一步验证选择器是否只包含当前元素的属性
+        
+        // 获取元素信息用于验证
+        const tagName = element.tagName.toLowerCase();
+        const id = element.id;
+        
+        // 安全获取className
+        let classNameStr = '';
+        if (element.className) {
+            if (typeof element.className === 'string') {
+                classNameStr = element.className;
+            } else if (element.className.baseVal) {
+                classNameStr = element.className.baseVal;
+            } else if (element.className.toString) {
+                classNameStr = element.className.toString();
+            }
+        }
+        const classes = classNameStr ? classNameStr.split(' ').filter(c => c.trim()) : [];
+        
+        // 验证选择器中的class是否都在元素的class列表中
+        // 提取选择器中的所有class
+        const classSelectors = cleanSelector.match(/\.([a-zA-Z0-9_-]+)/g);
+        if (classSelectors) {
+            const requiredClasses = classSelectors.map(s => s.substring(1));
+            // 检查元素是否包含选择器中的所有class
+            const hasAllClasses = requiredClasses.every(cls => classes.includes(cls));
+            if (!hasAllClasses) {
+                return false; // 选择器中的class不在元素中，不匹配
+            }
+        }
+        
+        // 验证选择器中的id是否匹配元素的id
+        const idSelectors = cleanSelector.match(/#([a-zA-Z0-9_-]+)/g);
+        if (idSelectors) {
+            const requiredIds = idSelectors.map(s => s.substring(1));
+            // 检查元素id是否匹配选择器中的id
+            const hasMatchingId = requiredIds.some(reqId => id === reqId);
+            if (!hasMatchingId && idSelectors.length > 0) {
+                return false; // 选择器中的id不匹配元素的id
+            }
+        }
+        
+        // 如果通过了以上检查，说明是直接匹配
+        return true;
     }
     
     getDOMPath(element) {

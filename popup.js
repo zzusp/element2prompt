@@ -87,7 +87,7 @@ class PopupManager {
             console.log('[Popup] 操作执行结果:', response);
             return response && response.success;
         } catch (error) {
-            console.error('[Popup] 执行操作失败:', error);
+            console.info('[Popup] 执行操作失败:', error);
             // 如果消息传递失败，可能是content script还没有加载
             // 注意：manifest.json中已经配置了自动注入，通常不需要手动注入
             // 但如果确实需要，先检查是否已经注入
@@ -123,7 +123,7 @@ class PopupManager {
                 }
                 
                 // content script不存在，尝试注入（但通常不应该发生，因为manifest已配置自动注入）
-                console.warn('[Popup] Content script not found, attempting to inject (this should not happen)');
+                console.info('[Popup] Content script not found, attempting to inject (this should not happen)');
                 await chrome.scripting.executeScript({
                     target: { tabId: this.currentTabId },
                     files: ['content.js']

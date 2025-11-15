@@ -9,6 +9,7 @@
 - ✏️ **用户指令输入**: 必填的自定义指令输入框，描述你的修改需求
 - 📋 **自动生成提示词**: 选中元素后自动填充模板并复制到剪贴板
 - ⚙️ **可配置模板**: 自定义提示词模板，支持变量替换
+- 🤖 **角色定义优化**: 模板包含AI角色定义，提高回答质量和准确性
 - 🎨 **现代化UI设计**: 渐变背景、流畅动画、优雅的交互体验
 - 💾 **状态持久化**: 记住选择状态和模板配置
 
@@ -50,15 +51,21 @@
 4. 点击"保存"按钮保存配置
 
 ### 默认模板结构
-默认模板采用任务导向的设计，让AI更容易理解用户意图：
+默认模板采用角色定义和任务导向的设计，让AI更容易理解自己的定位和用户意图：
 
 ```markdown
-# Task: Modify Web Element
+# Locate the code corresponding to the user-selected element on the page and implement the user's requirement
+
+## Role
+You are a senior front-end engineer, highly skilled in all front-end technology stacks...
+
+## Task
+Please help me locate the corresponding code in the project according to the target element information from the browser, and modify the code to implement the user requirement.
 
 ## User Requirement
 {userInstruction}
 
-## Target Element Context
+## Content Information of the Target Element in the Browser
 ### Basic Information
 ...
 ### HTML Structure
@@ -67,7 +74,13 @@
 ...
 ```
 
-这种结构将用户需求放在最前面，元素信息作为上下文，帮助AI更好地理解任务。
+这种结构包含：
+- **Role（角色定义）**: 明确定义AI为资深前端工程师，擅长各种前端技术栈，帮助AI更好地定位自己的角色
+- **Task（任务说明）**: 清晰说明需要完成的任务
+- **User Requirement（用户需求）**: 用户的具体修改需求
+- **Content Information（元素信息）**: 提供目标元素的详细上下文信息
+
+通过角色定义和任务导向的设计，能够显著提高AI的回答质量和准确性。
 
 ## 项目结构
 
@@ -133,6 +146,11 @@ element2prompt/
 MIT License - 详见 LICENSE 文件
 
 ## 更新日志
+
+### v1.1.0
+- 🤖 添加AI角色定义到提示词模板，提高回答质量
+- 📝 优化模板结构，包含Role、Task、User Requirement和Content Information四个部分
+- 🔧 优化日志级别，将不影响功能的预期错误调整为info级别
 
 ### v1.0.0
 - ✨ 初始版本发布
