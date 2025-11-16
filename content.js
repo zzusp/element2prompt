@@ -10,6 +10,8 @@ class ContentExtractor {
         this.toolbar = null;
         this.messageListenerRegistered = false;
         this.highlightOverlay = null; // 选中框覆盖层
+        this.isDragging = false; // 是否正在拖拽
+        this.dragOffset = { x: 0, y: 0 }; // 拖拽偏移量
         
         console.log('[Content] ContentExtractor instance created');
         this.init();
@@ -204,7 +206,7 @@ class ContentExtractor {
             }
             
             this.toolbar.innerHTML = `
-                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 16px 20px; color: white; display: flex; justify-content: space-between; align-items: center;">
+                <div id="toolbarHeader" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 16px 20px; color: white; display: flex; justify-content: space-between; align-items: center; cursor: move; user-select: none;">
                     <div>
                         <div style="font-size: 16px; font-weight: 600; margin-bottom: 2px;">选择模式</div>
                         <div style="font-size: 11px; opacity: 0.9; font-weight: 300;">Element2Prompt</div>
@@ -242,8 +244,15 @@ class ContentExtractor {
             document.body.appendChild(this.toolbar);
             console.log('[Content] Toolbar created and added to DOM');
             
+            // 恢复toolbar位置
+            this.restoreToolbarPosition();
+            
+            // 设置拖拽功能
+            this.setupToolbarDrag();
+            
             // 绑定工具栏事件
-            this.toolbar.querySelector('#exitSelectMode').addEventListener('click', () => {
+            this.toolbar.querySelector('#exitSelectMode').addEventListener('click', (e) => {
+                e.stopPropagation(); // 防止触发拖拽
                 console.log('[Content] Exit button clicked in toolbar');
                 // 直接调用退出方法，因为toolbar在content script中
                 this.exitSelectMode();
@@ -269,11 +278,175 @@ class ContentExtractor {
         });
     }
     
+    setupToolbarDrag() {
+        if (!this.toolbar) return;
+        
+        const header = this.toolbar.querySelector('#toolbarHeader');
+        if (!header) return;
+        
+        // 鼠标移动事件（在document上监听，确保即使鼠标移出toolbar也能继续拖拽）
+        const handleMouseMove = (e) => {
+            if (!this.isDragging) return;
+            
+            // 计算新位置
+            const newLeft = e.clientX - this.dragOffset.x;
+            const newTop = e.clientY - this.dragOffset.y;
+            
+            // 限制在视口内
+            const maxLeft = window.innerWidth - this.toolbar.offsetWidth;
+            const maxTop = window.innerHeight - this.toolbar.offsetHeight;
+            
+            const clampedLeft = Math.max(0, Math.min(newLeft, maxLeft));
+            const clampedTop = Math.max(0, Math.min(newTop, maxTop));
+            
+            // 更新位置
+            this.toolbar.style.left = clampedLeft + 'px';
+            this.toolbar.style.top = clampedTop + 'px';
+            this.toolbar.style.right = 'auto';
+            this.toolbar.style.bottom = 'auto';
+        };
+        
+        // 鼠标释放事件
+        const handleMouseUp = () => {
+            if (!this.isDragging) return;
+            
+            this.isDragging = false;
+            
+            // 恢复样式
+            this.toolbar.style.transition = ''; // 恢复过渡动画
+            header.style.cursor = 'move';
+            header.style.opacity = '1';
+            
+            // 保存位置
+            this.saveToolbarPosition();
+            
+            // 移除事件监听器
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+        };
+        
+        // 鼠标按下事件
+        header.addEventListener('mousedown', (e) => {
+            // 如果点击的是退出按钮，不触发拖拽
+            if (e.target.id === 'exitSelectMode' || e.target.closest('#exitSelectMode')) {
+                return;
+            }
+            
+            this.isDragging = true;
+            
+            // 计算鼠标相对于toolbar的偏移量
+            const toolbarRect = this.toolbar.getBoundingClientRect();
+            this.dragOffset.x = e.clientX - toolbarRect.left;
+            this.dragOffset.y = e.clientY - toolbarRect.top;
+            
+            // 添加拖拽样式
+            this.toolbar.style.transition = 'none'; // 拖拽时禁用过渡动画
+            header.style.cursor = 'grabbing';
+            header.style.opacity = '0.9';
+            
+            // 在document上监听mousemove和mouseup
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp, { once: true });
+            
+            // 阻止默认行为
+            e.preventDefault();
+        });
+    }
+    
+    saveToolbarPosition() {
+        if (!this.toolbar) return;
+        
+        const rect = this.toolbar.getBoundingClientRect();
+        const position = {
+            left: rect.left,
+            top: rect.top
+        };
+        
+        // 保存到chrome storage
+        chrome.storage.local.set({ toolbarPosition: position }, () => {
+            console.log('[Content] Toolbar position saved:', position);
+        });
+    }
+    
+    restoreToolbarPosition() {
+        if (!this.toolbar) return;
+        
+        // 从chrome storage恢复位置
+        chrome.storage.local.get(['toolbarPosition'], (result) => {
+            if (result.toolbarPosition) {
+                const { left, top } = result.toolbarPosition;
+                
+                // 验证位置是否在视口内
+                const maxLeft = window.innerWidth - this.toolbar.offsetWidth;
+                const maxTop = window.innerHeight - this.toolbar.offsetHeight;
+                
+                const clampedLeft = Math.max(0, Math.min(left, maxLeft));
+                const clampedTop = Math.max(0, Math.min(top, maxTop));
+                
+                this.toolbar.style.left = clampedLeft + 'px';
+                this.toolbar.style.top = clampedTop + 'px';
+                this.toolbar.style.right = 'auto';
+                this.toolbar.style.bottom = 'auto';
+                
+                console.log('[Content] Toolbar position restored:', { left: clampedLeft, top: clampedTop });
+            }
+        });
+        
+        // 监听窗口大小变化，确保toolbar始终在视口内
+        if (!this.toolbarResizeHandler) {
+            this.toolbarResizeHandler = () => {
+                if (!this.toolbar || this.isDragging) return;
+                
+                const rect = this.toolbar.getBoundingClientRect();
+                const maxLeft = window.innerWidth - this.toolbar.offsetWidth;
+                const maxTop = window.innerHeight - this.toolbar.offsetHeight;
+                
+                let needsAdjustment = false;
+                let newLeft = rect.left;
+                let newTop = rect.top;
+                
+                if (rect.left < 0) {
+                    newLeft = 0;
+                    needsAdjustment = true;
+                } else if (rect.left > maxLeft) {
+                    newLeft = maxLeft;
+                    needsAdjustment = true;
+                }
+                
+                if (rect.top < 0) {
+                    newTop = 0;
+                    needsAdjustment = true;
+                } else if (rect.top > maxTop) {
+                    newTop = maxTop;
+                    needsAdjustment = true;
+                }
+                
+                if (needsAdjustment) {
+                    this.toolbar.style.left = newLeft + 'px';
+                    this.toolbar.style.top = newTop + 'px';
+                    this.saveToolbarPosition();
+                }
+            };
+            
+            window.addEventListener('resize', this.toolbarResizeHandler);
+        }
+    }
+    
     removeToolbar() {
         if (this.toolbar) {
             console.log('[Content] Removing toolbar');
+            // 保存位置后再移除
+            this.saveToolbarPosition();
+            
+            // 移除窗口resize监听器
+            if (this.toolbarResizeHandler) {
+                window.removeEventListener('resize', this.toolbarResizeHandler);
+                this.toolbarResizeHandler = null;
+            }
+            
             this.toolbar.remove();
             this.toolbar = null;
+            this.isDragging = false; // 重置拖拽状态
             console.log('[Content] Toolbar removed');
         }
     }
