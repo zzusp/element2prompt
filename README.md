@@ -6,6 +6,16 @@
 支持市面上所有的AI IDE/CLI（Claude Code、Cursor等）
 ![Popup界面](docs/popup.png)
 
+
+### 📹 项目演示
+
+[观看项目演示视频](docs/element2prompt.mp4)
+
+### 相关文档
+- [让你的Vibe Coding指哪打哪🎯](https://juejin.cn/post/7572781559750770715)
+- [Comate的Zulu智能体有多能打，10分钟写一个谷歌拓展🤖](https://juejin.cn/post/7573525927793704986)
+
+
 ## 功能特性
 
 - 🎯 **智能元素选择**: 点击进入选择模式，鼠标悬浮高亮元素
