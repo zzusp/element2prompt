@@ -56,14 +56,82 @@ You are able to accurately understand user requirements, quickly locate the corr
 
     async ensureContentScriptInjected(tabId) {
         try {
+            // 先检查标签页信息，判断是否为特殊页面
+            const tab = await chrome.tabs.get(tabId);
+            if (tab && tab.url) {
+                const url = tab.url;
+                // 检查是否为特殊协议页面
+                const isSpecialProtocol = /^(chrome|edge|about|moz-extension|chrome-extension):\/\//i.test(url);
+                
+                // 如果是 chrome-extension://，检查是否是当前扩展
+                if (url.startsWith('chrome-extension://')) {
+                    try {
+                        const extensionId = chrome.runtime.id;
+                        if (url.startsWith('chrome-extension://' + extensionId + '/')) {
+                            // 是当前扩展的页面，可以注入
+                            console.log('[Background] 当前扩展页面，允许注入');
+                        } else {
+                            // 是其他扩展的页面，不允许注入
+                            console.log('[Background] 其他扩展页面，不允许注入:', url);
+                            return false;
+                        }
+                    } catch (e) {
+                        console.warn('[Background] 无法获取扩展ID，跳过注入:', e);
+                        return false;
+                    }
+                } else if (isSpecialProtocol) {
+                    // 其他特殊协议页面，不允许注入
+                    console.log('[Background] 特殊协议页面，不允许注入:', url);
+                    return false;
+                }
+            }
+            
+            // 先尝试检查 content script 是否已经存在
+            try {
+                const checkResponse = await new Promise((resolve) => {
+                    chrome.tabs.sendMessage(tabId, {
+                        action: 'testConnection'
+                    }, (response) => {
+                        if (chrome.runtime.lastError) {
+                            resolve(null);
+                        } else {
+                            resolve(response);
+                        }
+                    });
+                });
+                
+                if (checkResponse) {
+                    console.log('[Background] Content script 已存在，无需注入');
+                    return true;
+                }
+            } catch (checkError) {
+                // 检查失败，继续尝试注入
+                console.log('[Background] 检查 content script 是否存在失败，尝试注入');
+            }
+            
+            // manifest.json 已配置自动注入，通常不需要手动注入
+            // 只有在确实需要时才注入
             const result = await chrome.scripting.executeScript({
                 target: { tabId: tabId },
                 files: ['content.js']
             });
             console.log('[Background] Content script 注入结果:', result);
+            
+            // 等待一下让 content script 初始化
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
             return true;
         } catch (error) {
             console.error('[Background] 注入content script失败:', error);
+            // 如果是因为权限问题或特殊页面，不抛出错误
+            if (error.message && (
+                error.message.includes('Cannot access') ||
+                error.message.includes('Cannot execute') ||
+                error.message.includes('chrome://')
+            )) {
+                console.warn('[Background] 特殊页面或权限受限，无法注入:', error.message);
+                return false;
+            }
             return false;
         }
     }

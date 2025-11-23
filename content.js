@@ -1,3 +1,46 @@
+// 检查 chrome.runtime 是否可用
+function isChromeRuntimeAvailable() {
+    try {
+        return typeof chrome !== 'undefined' &&
+               chrome.runtime &&
+               typeof chrome.runtime.sendMessage === 'function' &&
+               typeof chrome.runtime.onMessage === 'object';
+    } catch (e) {
+        return false;
+    }
+}
+
+// 检测是否为特殊页面（不应该运行 content script 的页面）
+function isSpecialPage() {
+    try {
+        const url = window.location.href;
+        // 检测特殊协议
+        const isSpecialProtocol = /^(chrome|edge|about|moz-extension|chrome-extension):\/\//i.test(url);
+        
+        if (!isSpecialProtocol) return false;
+        
+        // chrome-extension:// 协议需要检查是否是当前扩展
+        if (url.startsWith('chrome-extension://')) {
+            if (isChromeRuntimeAvailable()) {
+                try {
+                    const extensionId = chrome.runtime.id;
+                    // 如果是当前扩展的页面，允许运行
+                    return !url.startsWith('chrome-extension://' + extensionId + '/');
+                } catch (e) {
+                    return true; // 如果无法获取 ID，视为特殊页面
+                }
+            }
+            return true; // chrome.runtime 不可用时，视为特殊页面
+        }
+        
+        // 其他特殊协议页面
+        return true;
+    } catch (e) {
+        // 出错时保守处理，视为特殊页面
+        return true;
+    }
+}
+
 // 防止重复声明类
 if (typeof window.__CONTENT_EXTRACTOR_CLASS_DECLARED__ === 'undefined') {
     window.__CONTENT_EXTRACTOR_CLASS_DECLARED__ = true;
@@ -26,6 +69,12 @@ class ContentExtractor {
         // 防止重复注册消息监听器
         if (this.messageListenerRegistered) {
             console.log('[Content] Message listener already registered');
+            return;
+        }
+        
+        // 检查 chrome.runtime 是否可用
+        if (!isChromeRuntimeAvailable()) {
+            console.warn('[Content] chrome.runtime 不可用，跳过消息监听器注册');
             return;
         }
         
@@ -1174,30 +1223,81 @@ class ContentExtractor {
     // 将类赋值给window对象，以便重复加载时也能访问
     window.ContentExtractor = ContentExtractor;
 
-    // 初始化 - 确保在所有frame中都初始化消息监听器
-    console.log('[Content] Initializing ContentExtractor...');
-    if (!window.__CONTENT_EXTRACTOR_INSTANCE__) {
-        window.__CONTENT_EXTRACTOR_INSTANCE__ = new ContentExtractor();
+    // 初始化函数 - 添加安全检查
+    function initializeContentExtractor() {
+        // 检查是否在特殊页面中
+        if (isSpecialPage()) {
+            console.log('[Content] 检测到特殊页面，跳过 ContentExtractor 初始化:', window.location.href);
+            return;
+        }
         
-        // 在顶层frame中记录初始化状态
-        if (window === window.top) {
-            console.log('[Content] Top-level frame ContentExtractor initialized successfully');
+        // 检查 chrome.runtime 是否可用
+        if (!isChromeRuntimeAvailable()) {
+            console.warn('[Content] chrome.runtime 不可用，跳过 ContentExtractor 初始化');
+            return;
         }
+        
+        // 防止重复初始化
+        if (window.__CONTENT_EXTRACTOR_INITIALIZED__) {
+            console.log('[Content] ContentExtractor 已初始化，跳过重复初始化');
+            // 即使已初始化，也要确保消息监听器已注册
+            if (window.__CONTENT_EXTRACTOR_INSTANCE__ && !window.__CONTENT_EXTRACTOR_INSTANCE__.messageListenerRegistered) {
+                window.__CONTENT_EXTRACTOR_INSTANCE__.setupMessageListener();
+            }
+            return;
+        }
+        
+        try {
+            console.log('[Content] Initializing ContentExtractor...');
+            
+            // 创建实例
+            if (!window.__CONTENT_EXTRACTOR_INSTANCE__) {
+                window.__CONTENT_EXTRACTOR_INSTANCE__ = new ContentExtractor();
+            }
+            
+            // 标记为已初始化
+            window.__CONTENT_EXTRACTOR_INITIALIZED__ = true;
+            
+            // 在顶层frame中记录初始化状态
+            if (window === window.top) {
+                console.log('[Content] Top-level frame ContentExtractor initialized successfully');
+            } else {
+                console.log('[Content] Sub-frame ContentExtractor initialized successfully');
+            }
+        } catch (error) {
+            console.error('[Content] ContentExtractor 初始化失败:', error);
+            // 初始化失败时，清除标记以便下次重试
+            window.__CONTENT_EXTRACTOR_INITIALIZED__ = false;
+        }
+    }
+
+    // 执行初始化
+    // 如果 DOM 已加载，立即初始化；否则等待 DOMContentLoaded
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeContentExtractor, { once: true });
     } else {
-        console.log('[Content] ContentExtractor instance already exists, reusing existing instance');
-        // 如果实例已存在，确保消息监听器已注册
-        if (window.__CONTENT_EXTRACTOR_INSTANCE__ && !window.__CONTENT_EXTRACTOR_INSTANCE__.messageListenerRegistered) {
-            window.__CONTENT_EXTRACTOR_INSTANCE__.setupMessageListener();
-        }
+        // DOM 已加载，但在下一个事件循环中执行，避免阻塞
+        setTimeout(initializeContentExtractor, 0);
     }
 } else {
     // 类已经声明，只确保实例存在
     console.log('[Content] ContentExtractor class already declared, ensuring instance exists');
-    if (!window.__CONTENT_EXTRACTOR_INSTANCE__) {
+    
+    // 检查是否在特殊页面中
+    if (isSpecialPage()) {
+        console.log('[Content] 检测到特殊页面，跳过实例创建:', window.location.href);
+    } else if (!isChromeRuntimeAvailable()) {
+        console.warn('[Content] chrome.runtime 不可用，跳过实例创建');
+    } else if (!window.__CONTENT_EXTRACTOR_INSTANCE__) {
         // 如果类已声明但实例不存在，说明是重复加载，使用已存在的类创建实例
-        // 注意：由于类定义在if块内，重复加载时无法访问，所以需要从window获取
         if (window.ContentExtractor) {
-            window.__CONTENT_EXTRACTOR_INSTANCE__ = new window.ContentExtractor();
+            try {
+                window.__CONTENT_EXTRACTOR_INSTANCE__ = new window.ContentExtractor();
+                window.__CONTENT_EXTRACTOR_INITIALIZED__ = true;
+                console.log('[Content] 使用已存在的类创建新实例');
+            } catch (error) {
+                console.error('[Content] 创建实例失败:', error);
+            }
         } else {
             console.warn('[Content] ContentExtractor class not found, script may have been partially loaded');
         }

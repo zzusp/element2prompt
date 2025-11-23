@@ -123,11 +123,52 @@ class PopupManager {
                 }
                 
                 // content script不存在，尝试注入（但通常不应该发生，因为manifest已配置自动注入）
+                // 先检查是否为特殊页面
+                try {
+                    const tab = await chrome.tabs.get(this.currentTabId);
+                    if (tab && tab.url) {
+                        const url = tab.url;
+                        const isSpecialProtocol = /^(chrome|edge|about|moz-extension|chrome-extension):\/\//i.test(url);
+                        
+                        // 如果是 chrome-extension://，检查是否是当前扩展
+                        if (url.startsWith('chrome-extension://')) {
+                            try {
+                                const extensionId = chrome.runtime.id;
+                                if (!url.startsWith('chrome-extension://' + extensionId + '/')) {
+                                    // 是其他扩展的页面，不允许注入
+                                    throw new Error('其他扩展页面，不允许注入');
+                                }
+                            } catch (e) {
+                                throw new Error('无法获取扩展ID');
+                            }
+                        } else if (isSpecialProtocol) {
+                            // 其他特殊协议页面，不允许注入
+                            throw new Error('特殊协议页面，不允许注入: ' + url);
+                        }
+                    }
+                } catch (checkError) {
+                    console.warn('[Popup] 检查页面类型失败，跳过注入:', checkError.message);
+                    throw new Error('特殊页面或无法访问的页面');
+                }
+                
                 console.info('[Popup] Content script not found, attempting to inject (this should not happen)');
-                await chrome.scripting.executeScript({
-                    target: { tabId: this.currentTabId },
-                    files: ['content.js']
-                });
+                try {
+                    await chrome.scripting.executeScript({
+                        target: { tabId: this.currentTabId },
+                        files: ['content.js']
+                    });
+                } catch (injectError) {
+                    console.error('[Popup] 注入脚本失败:', injectError);
+                    // 如果是权限问题或特殊页面，抛出有意义的错误
+                    if (injectError.message && (
+                        injectError.message.includes('Cannot access') ||
+                        injectError.message.includes('Cannot execute') ||
+                        injectError.message.includes('chrome://')
+                    )) {
+                        throw new Error('特殊页面或权限受限，无法注入脚本');
+                    }
+                    throw injectError;
+                }
                 
                 // 等待一下让content script初始化
                 await new Promise(resolve => setTimeout(resolve, 200));
