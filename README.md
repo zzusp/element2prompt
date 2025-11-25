@@ -9,7 +9,7 @@
 
 ### 📹 项目演示
 
-[观看项目演示视频](docs/element2prompt.mp4)
+[观看项目演示视频]([docs/element2prompt.mp4](https://www.bilibili.com/video/BV14mUPB2EUf/?share_source=copy_web&vd_source=6925f72b567b69e9d2d49ef7d6f1c711))
 
 ### 使用Comate IDE开发过程
 
